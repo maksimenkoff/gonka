@@ -177,6 +177,26 @@ class MockServerInferenceMock(private val baseUrl: String, val name: String) : I
         return null // StubMapping is not used in this implementation
     }
 
+    fun setExpectedAuthorizationHeader(authorizationHeader: String?, hostName: String? = null) {
+        data class SetAuthHeaderRequest(
+            val authorization_header: String?,
+            val host_name: String?
+        )
+        val request = SetAuthHeaderRequest(authorizationHeader, hostName)
+        try {
+            val (_, response, _) = Fuel.post("$baseUrl/api/v1/responses/auth-token")
+                .jsonBody(cosmosJson.toJson(request))
+                .responseString()
+            if (response.statusCode != 200) {
+                Logger.error("Failed to set expected Authorization header: ${response.statusCode} ${response.responseMessage}")
+            } else {
+                Logger.debug("Set expected Authorization header to '$authorizationHeader' for host '$hostName'")
+            }
+        } catch (e: Exception) {
+            Logger.error("Failed to set expected Authorization header: ${e.message}")
+        }
+    }
+
     /**
      * Sets the POC response with the specified weight.
      *

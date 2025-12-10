@@ -14,6 +14,7 @@ import com.productscience.mockserver.model.setModelState
 import com.productscience.mockserver.service.ResponseService
 import com.productscience.mockserver.service.SSEService
 import com.productscience.mockserver.service.HostName
+import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 
@@ -86,6 +87,29 @@ private suspend fun handleChatCompletions(call: ApplicationCall, responseService
 //        return
 //    }
 
+    // Authorization header validation (configurable per host)
+    val hostName = HostName(call.getHost())
+    val expectedAuth = responseService.getExpectedAuthorizationHeader(hostName)
+    val providedAuth = call.request.headers[HttpHeaders.Authorization]
+    if (expectedAuth != null) {
+        if (providedAuth == null || providedAuth != expectedAuth) {
+            // Respond 401 Unauthorized in OpenAI-style error body
+            val statusCode = HttpStatusCode.Unauthorized.value
+            val errorBody = """
+                {
+                  "error": {
+                    "message": "Unauthorized: Missing or invalid auth token",
+                    "type": "invalid_request_error",
+                    "code": $statusCode
+                  }
+                }
+            """.trimIndent()
+            call.response.header("Content-Type", "application/json")
+            call.respondText(errorBody, ContentType.Application.Json, HttpStatusCode.Unauthorized)
+            return
+        }
+    }
+
     // Get the request body
     val requestBody = call.receiveText()
     logger.info("Received chat completion request for path: ${call.request.path()}")
@@ -112,7 +136,6 @@ private suspend fun handleChatCompletions(call: ApplicationCall, responseService
     val path = call.request.path()
 
     // Get the response configuration from the ResponseService (per-host)
-    val hostName = HostName(call.getHost())
     val responseConfig = responseService.getInferenceResponseConfig(path, model, hostName)
     logger.info("Retrieved response config for path $path: ${responseConfig != null}")
 

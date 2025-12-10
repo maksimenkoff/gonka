@@ -2,6 +2,7 @@ import com.productscience.*
 import com.productscience.data.*
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.tinylog.kotlin.Logger
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -16,13 +17,9 @@ class AuthTokenFlowTests : TestermintTest() {
         val (cluster, genesis) = initCluster(reboot = true)
         val authToken = "test-auth-token-${UUID.randomUUID()}"
         
-        // Configure MLNodes to verify auth token
+        // Configure mock servers to require the Authorization header
         cluster.allPairs.forEach { pair ->
-            pair.mock?.setRequestValidator { request ->
-                val token = request.headers["Authorization"]
-                assertThat(token).isEqualTo("Bearer $authToken")
-                true
-            }
+            (pair.mock as? MockServerInferenceMock)?.setExpectedAuthorizationHeader("Bearer $authToken")
             pair.waitForMlNodesToLoad()
         }
 
@@ -69,15 +66,9 @@ class AuthTokenFlowTests : TestermintTest() {
         val (cluster, genesis) = initCluster(reboot = true)
         val authToken = "test-auth-token-${UUID.randomUUID()}"
         
-        // Configure MLNodes to reject requests without auth token by setting an error response
+        // Configure mock servers to require the Authorization header
         cluster.allPairs.forEach { pair ->
-            // Set up the mock to return a 401 Unauthorized error for all inference requests
-            // This simulates the behavior of rejecting requests without proper auth tokens
-            pair.mock?.setInferenceErrorResponse(
-                statusCode = 401,
-                errorMessage = "Unauthorized: Missing or invalid auth token",
-                errorType = "invalid_request_error"
-            )
+            (pair.mock as? MockServerInferenceMock)?.setExpectedAuthorizationHeader("Bearer $authToken")
             pair.waitForMlNodesToLoad()
         }
 
@@ -92,7 +83,7 @@ class AuthTokenFlowTests : TestermintTest() {
         assertThat(inference.statusEnum).isEqualTo(InferenceStatus.FAILED)
         Logger.info("Inference failed as expected due to missing auth token")
         
-        // 4. Now configure the mock to accept requests and try with proper auth token
+        // 4. Now configure the mock response and try with proper auth token
         cluster.allPairs.forEach { pair ->
             // Reset the mock to return a successful response
             pair.mock?.setInferenceResponse(

@@ -7,6 +7,7 @@ import com.productscience.mockserver.service.HostName
 import com.productscience.mockserver.service.ModelName
 import com.productscience.mockserver.service.ResponseService
 import com.productscience.mockserver.service.ScenarioName
+import io.ktor.http.HttpHeaders
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -61,6 +62,16 @@ data class SetPocResponseRequest(
 )
 
 /**
+ * Data class for setting expected Authorization header
+ */
+data class SetAuthHeaderRequest(
+    @JsonProperty("authorization_header")
+    val authorizationHeader: String? = null,
+    @JsonProperty("host_name")
+    val hostName: String? = null,
+)
+
+/**
  * Configures routes for response modification endpoints.
  */
 fun Route.responseRoutes(responseService: ResponseService) {
@@ -99,6 +110,33 @@ fun Route.responseRoutes(responseService: ResponseService) {
                 mapOf(
                     "status" to "error",
                     "message" to "Failed to set inference response: ${e.message}"
+                )
+            )
+        }
+    }
+
+    // POST /api/v1/responses/auth-token - Sets expected Authorization header for inference requests
+    post("/api/v1/responses/auth-token") {
+        try {
+            val request = call.receive<SetAuthHeaderRequest>()
+            logger.info("Received SetAuthHeaderRequest: $request")
+            responseService.setExpectedAuthorizationHeader(
+                request.authorizationHeader,
+                request.hostName?.let { HostName(it) }
+            )
+            call.respond(
+                HttpStatusCode.OK,
+                mapOf(
+                    "status" to "success",
+                    "message" to "Authorization header expectation updated"
+                )
+            )
+        } catch (e: Exception) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf(
+                    "status" to "error",
+                    "message" to "Failed to set Authorization header: ${e.message}"
                 )
             )
         }

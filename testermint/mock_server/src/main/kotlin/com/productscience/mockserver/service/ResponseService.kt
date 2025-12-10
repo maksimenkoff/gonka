@@ -60,12 +60,16 @@ class ResponseService {
     // Store for the last inference request
     private val lastInferenceRequest = AtomicReference<String?>(null)
 
+    // Store expected Authorization header per host (full header value, e.g., "Bearer <token>")
+    private val expectedAuthHeaders = ConcurrentHashMap<HostName?, String>()
+
     // No string keys anymore; use strongly typed value classes for the key parts.
 
     fun clearOverrides() {
         inferenceResponses.clear()
         pocResponses.clear()
         lastInferenceRequest.set(null)
+        expectedAuthHeaders.clear()
     }
 
     /**
@@ -125,6 +129,26 @@ class ResponseService {
         val key = Triple(Endpoint(endpoint), null, host)
         inferenceResponses[key] = ResponseConfig.Error(errorResponse, delay, streamDelay)
         return endpoint
+    }
+
+    /**
+     * Sets expected Authorization header for a host. If header is null or blank, removes requirement.
+     */
+    fun setExpectedAuthorizationHeader(header: String?, host: HostName?) {
+        if (header == null || header.isBlank()) {
+            expectedAuthHeaders.remove(host)
+            logger.debug("Cleared expected Authorization header for host='${host?.name}'")
+        } else {
+            expectedAuthHeaders[host] = header
+            logger.debug("Set expected Authorization header for host='${host?.name}' to '$header'")
+        }
+    }
+
+    /**
+     * Gets expected Authorization header for a host, falling back to global (null host) if present.
+     */
+    fun getExpectedAuthorizationHeader(host: HostName): String? {
+        return expectedAuthHeaders[host] ?: expectedAuthHeaders[null]
     }
 
     // Backward-compatible overload (defaults to localhost)
